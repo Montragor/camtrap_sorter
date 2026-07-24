@@ -69,3 +69,4 @@ resource "aws_s3_bucket_policy" "frontend" {
     aws_s3_bucket_public_access_block.frontend
   ]
 }
+
