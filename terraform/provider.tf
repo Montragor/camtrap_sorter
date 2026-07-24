@@ -8,7 +8,7 @@ terraform {
     }
   }
 
-backend "s3" {
+  backend "s3" {
     bucket       = "camtrap-sorter-tfstate-636058550437-eu-central-1-an"
     key          = "terraform.tfstate"
     region       = "eu-central-1"

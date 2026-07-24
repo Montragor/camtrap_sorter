@@ -1,5 +1,5 @@
 resource "aws_s3_bucket" "raw_images" { # "raw_images" = dein frei wählbarer interner Name, nur zur Referenz im eigenen Code
-  bucket = "camtrap-sorter-raw" # Der echte AWS-Name, weltweit eindeutig, erscheint so in der AWS Konsole
+  bucket = "camtrap-sorter-raw"         # Der echte AWS-Name, weltweit eindeutig, erscheint so in der AWS Konsole
 
   tags = {
     Project = "camtrap-sorter-upload"
