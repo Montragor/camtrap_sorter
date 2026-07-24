@@ -6,3 +6,15 @@ resource "aws_s3_bucket" "raw_images" { # "raw_images" = dein frei wählbarer in
     Purpose = "raw-image-upload"
   }
 }
+
+resource "aws_s3_bucket" "processed_images" {
+
+  bucket = "camtrap-sorter-processed"
+
+  tags = {
+    Project = "camtrap-sorter"
+    Purpose = "sorted-image-output"
+  }
+
+}
+
