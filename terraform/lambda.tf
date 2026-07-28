@@ -9,6 +9,12 @@ resource "aws_lambda_function" "megadetector_sorter" { # "aws_lambda_function" =
   timeout     = 60   # Sekunden; MegaDetector-Inferenz braucht mehr Zeit als Standard-3s
   memory_size = 2048 # MB; PyTorch/MegaDetector braucht spürbar mehr als Standard-128MB
 
+  environment {
+    variables = {
+      PROCESSED_BUCKET = aws_s3_bucket.processed_images.bucket
+    }
+  }
+
   tags = {
     Project = "camtrap-sorter"
     Purpose = "image-classification"
