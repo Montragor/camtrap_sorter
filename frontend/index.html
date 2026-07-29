@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>camtrap-sorter-aws</title>
+  <script src="https://sdk.amazonaws.com/js/aws-sdk-2.1691.0.min.js"></script>
   <style>
     body {
       font-family: sans-serif;
@@ -47,14 +48,44 @@
   </div>
 
   <script>
-    document.getElementById("uploadButton").addEventListener("click", () => {
+    const IDENTITY_POOL_ID = "eu-central-1:47c31f5c-d051-48ca-b3d6-c089d75b7062";
+    const REGION = "eu-central-1";
+    const RAW_BUCKET = "camtrap-sorter-raw";
+
+    AWS.config.region = REGION;
+    AWS.config.credentials = new AWS.CognitoIdentityCredentials({
+      IdentityPoolId: IDENTITY_POOL_ID,
+    });
+
+    const s3 = new AWS.S3({ apiVersion: "2006-03-01" });
+
+    document.getElementById("uploadButton").addEventListener("click", async () => {
       const files = document.getElementById("fileInput").files;
+      const statusEl = document.getElementById("status");
+
       if (files.length === 0) {
-        document.getElementById("status").textContent = "Bitte zuerst Dateien auswählen.";
+        statusEl.textContent = "Bitte zuerst Dateien auswählen.";
         return;
       }
-      // Platzhalter: eigentliche Upload-Logik kommt im nächsten Todo dazu
-      document.getElementById("status").textContent = `${files.length} Datei(en) ausgewählt, Upload-Logik folgt.`;
+
+      statusEl.textContent = "Lade hoch...";
+
+      try {
+        for (const file of files) {
+          const params = {
+            Bucket: RAW_BUCKET,
+            Key: file.name,
+            Body: file,
+            ContentType: file.type,
+          };
+          await s3.putObject(params).promise();
+        }
+
+        statusEl.textContent = `${files.length} Datei(en) erfolgreich hochgeladen.`;
+      } catch (err) {
+        console.error(err);
+        statusEl.textContent = "Fehler beim Hochladen. Details in der Browser-Konsole.";
+      }
     });
   </script>
 </body>
