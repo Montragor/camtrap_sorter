@@ -1,7 +1,7 @@
 resource "aws_lambda_function" "megadetector_sorter" { # "aws_lambda_function" = fester Ressourcentyp vom AWS-Provider
   # "megadetector_sorter" = frei wählbarer interner Name
-  function_name = "camtrap-sorter-megadetector" # echter AWS-Name
-  package_type  = "Image"                       # wichtig: sagt Lambda, dass ein Container-Image genutzt wird, keine ZIP
+  function_name = "camtrap-sorter-megadetector"                              # echter AWS-Name
+  package_type  = "Image"                                                    # wichtig: sagt Lambda, dass ein Container-Image genutzt wird, keine ZIP
   image_uri     = "${aws_ecr_repository.megadetector.repository_url}:latest" # verweist auf das gepushte Image
 
   role = aws_iam_role.lambda_sorter.arn # verweist auf die IAM-Rolle aus vorherigem Todo
@@ -34,7 +34,7 @@ resource "aws_s3_bucket_notification" "raw_bucket_trigger" { # legt fest, WANN S
 
   lambda_function {
     lambda_function_arn = aws_lambda_function.megadetector_sorter.arn
-    events               = ["s3:ObjectCreated:*"] # löst bei jedem neuen Objekt aus, egal ob Upload/Kopie/Multipart
+    events              = ["s3:ObjectCreated:*"] # löst bei jedem neuen Objekt aus, egal ob Upload/Kopie/Multipart
   }
 
   depends_on = [aws_lambda_permission.allow_s3] # Berechtigung muss zuerst existieren, sonst schlägt apply fehl
