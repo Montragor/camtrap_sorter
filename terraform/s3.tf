@@ -6,6 +6,16 @@ resource "aws_s3_bucket" "raw_images" { # "raw_images" = dein frei wählbarer in
     Purpose = "raw-image-upload"
   }
 }
+resource "aws_s3_bucket_cors_configuration" "raw_images_cors" {
+  bucket = aws_s3_bucket.raw_images.id
+
+  cors_rule {
+    allowed_methods = ["PUT", "GET"]
+    allowed_origins = ["*"] # für MVP offen, später auf eure echte Frontend-URL einschränkbar
+    allowed_headers = ["*"]
+    max_age_seconds = 3000
+  }
+}
 
 resource "aws_s3_bucket" "processed_images" {
 
