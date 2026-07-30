@@ -23,7 +23,9 @@ def lambda_handler(event, context):
         source_bucket = record["s3"]["bucket"]["name"]
         source_key = record["s3"]["object"]["key"]
 
-        local_path = f"/tmp/{os.path.basename(source_key)}"
+        session_id, filename = source_key.split("/", 1)  # trennt Session-ID vom Dateinamen
+
+        local_path = f"/tmp/{filename}"
         s3.download_file(source_bucket, source_key, local_path)
 
         image = vis_utils.load_image(local_path)
@@ -36,11 +38,10 @@ def lambda_handler(event, context):
         if not detections_above_threshold:
             folder = "leer"
         else:
-            # höchste Konfidenz gewinnt, falls mehrere Kategorien im Bild erkannt wurden
             top_detection = max(detections_above_threshold, key=lambda d: d["conf"])
             folder = CATEGORY_TO_FOLDER.get(top_detection["category"], "leer")
 
-        target_key = f"{folder}/{os.path.basename(source_key)}"
+        target_key = f"{session_id}/{folder}/{filename}"  # Session-ID bleibt im Zielpfad erhalten
         s3.upload_file(local_path, PROCESSED_BUCKET, target_key)
         os.remove(local_path)
 
