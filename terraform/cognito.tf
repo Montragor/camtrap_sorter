@@ -32,12 +32,26 @@ resource "aws_iam_role_policy" "cognito_unauthenticated_permissions" {
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Sid      = "AllowUploadToRawBucketOnly"
-      Effect   = "Allow"
-      Action   = ["s3:PutObject"]
-      Resource = "${aws_s3_bucket.raw_images.arn}/*"
-    }]
+    Statement = [
+      {
+        Sid      = "AllowUploadToRawBucketOnly"
+        Effect   = "Allow"
+        Action   = ["s3:PutObject"]
+        Resource = "${aws_s3_bucket.raw_images.arn}/*"
+      },
+      {
+        Sid      = "AllowListProcessedBucket" # neu: Auflisten der Dateien erlauben
+        Effect   = "Allow"
+        Action   = ["s3:ListBucket"]
+        Resource = aws_s3_bucket.processed_images.arn
+      },
+      {
+        Sid      = "AllowReadProcessedBucket" # neu: Herunterladen der Dateien erlauben
+        Effect   = "Allow"
+        Action   = ["s3:GetObject"]
+        Resource = "${aws_s3_bucket.processed_images.arn}/*"
+      }
+    ]
   })
 }
 
