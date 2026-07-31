@@ -52,6 +52,8 @@
     const REGION = "eu-central-1";
     const RAW_BUCKET = "camtrap-sorter-raw";
 
+    let currentSessionId = null;
+
     AWS.config.region = REGION;
     AWS.config.credentials = new AWS.CognitoIdentityCredentials({
       IdentityPoolId: IDENTITY_POOL_ID,
@@ -63,10 +65,13 @@
       const files = document.getElementById("fileInput").files;
       const statusEl = document.getElementById("status");
 
+
       if (files.length === 0) {
         statusEl.textContent = "Bitte zuerst Dateien auswählen.";
         return;
       }
+
+      currentSessionId = crypto.randomUUID();
 
       statusEl.textContent = "Lade hoch...";
 
@@ -74,14 +79,14 @@
         for (const file of files) {
           const params = {
             Bucket: RAW_BUCKET,
-            Key: file.name,
+            Key: `${currentSessionId}/${file.name}`,
             Body: file,
             ContentType: file.type,
           };
           await s3.putObject(params).promise();
         }
 
-        statusEl.textContent = `${files.length} Datei(en) erfolgreich hochgeladen.`;
+        statusEl.textContent = statusEl.textContent = `${files.length} Datei(en) erfolgreich hochgeladen. Session-ID: ${currentSessionId}`;
       } catch (err) {
         console.error(err);
         statusEl.textContent = "Fehler beim Hochladen. Details in der Browser-Konsole.";
