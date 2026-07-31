@@ -28,6 +28,17 @@ resource "aws_s3_bucket" "processed_images" {
 
 }
 
+resource "aws_s3_bucket_cors_configuration" "processed_images_cors" {
+  bucket = aws_s3_bucket.processed_images.id
+
+  cors_rule {
+    allowed_methods = ["GET"]
+    allowed_origins = ["*"]
+    allowed_headers = ["*"]
+    max_age_seconds = 3000
+  }
+}
+
 resource "aws_s3_bucket" "frontend" {
   bucket = "camtrap-sorter-frontend"
 

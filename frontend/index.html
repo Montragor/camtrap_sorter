@@ -36,6 +36,21 @@
       font-size: 13px;
       color: #555;
     }
+
+    #results {
+      margin-top: 12px;
+      font-size: 13px;
+      text-align: left;
+    }
+
+    #results a {
+      color: #2e7d32;
+      text-decoration: none;
+    }
+
+    #results a:hover {
+      text-decoration: underline;
+    }
   </style>
 </head>
 <body>
@@ -45,12 +60,14 @@
     <br>
     <button id="uploadButton">Hochladen</button>
     <div id="status"></div>
+    <div id="results"></div>
   </div>
 
   <script>
     const IDENTITY_POOL_ID = "eu-central-1:47c31f5c-d051-48ca-b3d6-c089d75b7062";
     const REGION = "eu-central-1";
     const RAW_BUCKET = "camtrap-sorter-raw";
+    const PROCESSED_BUCKET = "camtrap-sorter-processed";
 
     let currentSessionId = null;
 
@@ -64,7 +81,7 @@
     document.getElementById("uploadButton").addEventListener("click", async () => {
       const files = document.getElementById("fileInput").files;
       const statusEl = document.getElementById("status");
-
+      const resultsEl = document.getElementById("results");
 
       if (files.length === 0) {
         statusEl.textContent = "Bitte zuerst Dateien auswählen.";
@@ -72,7 +89,7 @@
       }
 
       currentSessionId = crypto.randomUUID();
-
+      resultsEl.innerHTML = "";
       statusEl.textContent = "Lade hoch...";
 
       try {
@@ -86,12 +103,63 @@
           await s3.putObject(params).promise();
         }
 
-        statusEl.textContent = statusEl.textContent = `${files.length} Datei(en) erfolgreich hochgeladen. Session-ID: ${currentSessionId}`;
+        statusEl.textContent = `${files.length} Datei(en) erfolgreich hochgeladen. Session-ID: ${currentSessionId}`;
+        startPolling(currentSessionId, files.length);
       } catch (err) {
         console.error(err);
         statusEl.textContent = "Fehler beim Hochladen. Details in der Browser-Konsole.";
       }
     });
+
+    function startPolling(sessionId, expectedCount) {
+      const resultsEl = document.getElementById("results");
+      let attempts = 0;
+      const maxAttempts = 40; // 40 x 3s = 2 Minuten Timeout
+
+      const intervalId = setInterval(async () => {
+        attempts++;
+        console.log("Polling tick", attempts);
+
+        try {
+          const listResponse = await s3.listObjectsV2({
+            Bucket: PROCESSED_BUCKET,
+            Prefix: `${sessionId}/`,
+          }).promise();
+
+          const foundCount = listResponse.Contents ? listResponse.Contents.length : 0;
+
+          if (foundCount >= expectedCount) {
+            clearInterval(intervalId);
+            resultsEl.innerHTML = "<strong>Fertig! Deine Ergebnisse:</strong><br>";
+
+            for (const item of listResponse.Contents) {
+              const url = s3.getSignedUrl("getObject", {
+                Bucket: PROCESSED_BUCKET,
+                Key: item.Key,
+                Expires: 300,
+              });
+
+              const link = document.createElement("a");
+              link.href = url;
+              link.download = item.Key.split("/").pop();
+              link.textContent = item.Key.replace(`${sessionId}/`, "");
+              link.style.display = "block";
+              resultsEl.appendChild(link);
+            }
+            return;
+          }
+
+          resultsEl.textContent = `Verarbeitung läuft... (${foundCount}/${expectedCount} fertig)`;
+        } catch (err) {
+          console.error(err);
+        }
+
+        if (attempts >= maxAttempts) {
+          clearInterval(intervalId);
+          resultsEl.textContent = "Zeitüberschreitung. Bitte Seite neu laden und erneut versuchen.";
+        }
+      }, 3000);
+    }
   </script>
 </body>
 </html>
