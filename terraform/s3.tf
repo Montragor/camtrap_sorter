@@ -91,3 +91,32 @@ resource "aws_s3_bucket_policy" "frontend" {
   ]
 }
 
+resource "aws_s3_bucket_lifecycle_configuration" "raw_cleanup" {
+  bucket = aws_s3_bucket.raw_images.id
+
+  rule {
+    id     = "delete-raw-after-1-day"
+    status = "Enabled"
+
+    filter {}
+
+    expiration {
+      days = 1
+    }
+  }
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "processed_cleanup" {
+  bucket = aws_s3_bucket.processed_images.id
+
+  rule {
+    id     = "delete-processed-after-1-day"
+    status = "Enabled"
+
+    filter {}
+
+    expiration {
+      days = 1
+    }
+  }
+}
