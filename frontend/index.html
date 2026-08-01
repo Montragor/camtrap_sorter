@@ -78,6 +78,19 @@
 
     const s3 = new AWS.S3({ apiVersion: "2006-03-01" });
 
+    // crypto.randomUUID() ist nur in sicheren Kontexten (HTTPS oder localhost) verfügbar.
+    // S3 Static Website Hosting liefert nur über HTTP aus, daher Fallback nötig.
+    function generateSessionId() {
+      if (window.crypto && window.crypto.randomUUID) {
+        return crypto.randomUUID();
+      }
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+        const r = Math.random() * 16 | 0;
+        const v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+      });
+    }
+
     document.getElementById("uploadButton").addEventListener("click", async () => {
       const files = document.getElementById("fileInput").files;
       const statusEl = document.getElementById("status");
@@ -88,7 +101,7 @@
         return;
       }
 
-      currentSessionId = crypto.randomUUID();
+      currentSessionId = generateSessionId();
       resultsEl.innerHTML = "";
       statusEl.textContent = "Lade hoch...";
 
