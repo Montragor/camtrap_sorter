@@ -1,0 +1,35 @@
+name: TFLint
+
+on:
+  pull_request:
+    paths:
+      - 'terraform/**'
+
+jobs:
+  tflint:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: terraform
+
+    steps:
+      - name: Repo auschecken
+        uses: actions/checkout@v4
+
+      - name: TFLint installieren
+        uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: latest
+
+      - name: TFLint Cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.tflint.d/plugins
+          key: tflint-${{ hashFiles('.tflint.hcl') }}
+
+      - name: TFLint initialisieren (lädt AWS-Plugin)
+        run: tflint --init
+
+      - name: TFLint ausführen
+        run: tflint --recursive
