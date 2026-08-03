@@ -6,7 +6,7 @@ resource "aws_lambda_function" "megadetector_sorter" { # "aws_lambda_function" =
 
   role = aws_iam_role.lambda_sorter.arn # verweist auf die IAM-Rolle aus vorherigem Todo
 
-  timeout     = 60   # Sekunden; MegaDetector-Inferenz braucht mehr Zeit als Standard-3s
+  timeout     = 120   # Sekunden; MegaDetector-Inferenz braucht mehr Zeit als Standard-3s
   memory_size = 2048 # MB; PyTorch/MegaDetector braucht spürbar mehr als Standard-128MB
 
   environment {
