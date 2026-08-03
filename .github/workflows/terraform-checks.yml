@@ -1,0 +1,32 @@
+name: Terraform Checks
+
+on:
+  pull_request:
+    paths:
+      - 'terraform/**'
+
+jobs:
+  fmt-validate:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: terraform
+
+    steps:
+      - name: Repo auschecken
+        uses: actions/checkout@v4
+
+      - name: Terraform installieren
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7.0"
+
+      - name: Formatierung prüfen
+        run: terraform fmt -check -recursive
+
+      - name: Terraform initialisieren (ohne Remote-Backend)
+        run: terraform init -backend=false
+
+      - name: Syntax und Konfiguration validieren
+        run: terraform validate
