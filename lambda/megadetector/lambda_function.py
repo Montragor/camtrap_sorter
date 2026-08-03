@@ -1,4 +1,5 @@
 import os
+import urllib.parse
 import boto3
 from megadetector.detection import run_detector
 from megadetector.visualization import visualization_utils as vis_utils
@@ -21,7 +22,7 @@ CATEGORY_TO_FOLDER = {
 def lambda_handler(event, context):
     for record in event["Records"]:
         source_bucket = record["s3"]["bucket"]["name"]
-        source_key = record["s3"]["object"]["key"]
+        source_key = urllib.parse.unquote_plus(record["s3"]["object"]["key"])  # S3-Event liefert URL-kodierten Key
 
         session_id, filename = source_key.split("/", 1)  # trennt Session-ID vom Dateinamen
 
