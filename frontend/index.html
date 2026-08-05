@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <title>camtrap-sorter-aws</title>
   <script src="https://sdk.amazonaws.com/js/aws-sdk-2.1691.0.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <style>
     body {
       font-family: sans-serif;
@@ -11,9 +12,10 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      height: 100vh;
+      min-height: 100vh;
       margin: 0;
       background: #f5f5f5;
+      padding: 20px;
     }
 
     .box {
@@ -22,6 +24,53 @@
       border-radius: 8px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.1);
       text-align: center;
+      width: 100%;
+      max-width: 480px;
+    }
+
+    #dropZone {
+      border: 2px dashed #999;
+      border-radius: 8px;
+      padding: 32px;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+    }
+
+    #dropZone.dragover {
+      border-color: #2e7d32;
+      background: #f0f7f0;
+    }
+
+    #fileList {
+      margin-top: 16px;
+      max-height: 200px;
+      overflow-y: auto;
+      text-align: left;
+      font-size: 12px;
+    }
+
+    .file-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 3px 0;
+      border-bottom: 1px solid #eee;
+    }
+
+    .file-item span {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .file-item button {
+      margin: 0;
+      padding: 2px 8px;
+      font-size: 11px;
+      background: #fdeaea;
+      border: none;
+      border-radius: 4px;
     }
 
     button {
@@ -31,36 +80,68 @@
       cursor: pointer;
     }
 
-    #status {
-      margin-top: 12px;
+    .progress-line {
+      margin-top: 8px;
       font-size: 13px;
       color: #555;
-    }
-
-    #results {
-      margin-top: 12px;
-      font-size: 13px;
       text-align: left;
     }
 
-    #results a {
-      color: #2e7d32;
-      text-decoration: none;
+    .progress-bar-bg {
+      background: #eee;
+      border-radius: 4px;
+      height: 6px;
+      margin-top: 4px;
+      overflow: hidden;
     }
 
-    #results a:hover {
-      text-decoration: underline;
+    .progress-bar-fill {
+      background: #2e7d32;
+      height: 100%;
+      width: 0%;
+      transition: width 0.3s;
+    }
+
+    #downloadArea {
+      margin-top: 16px;
+    }
+
+    #downloadArea a {
+      display: inline-block;
+      padding: 10px 20px;
+      background: #2e7d32;
+      color: white;
+      text-decoration: none;
+      border-radius: 6px;
+      font-size: 14px;
     }
   </style>
 </head>
 <body>
   <div class="box">
     <h2>Wildkamera-Bilder hochladen</h2>
-    <input type="file" id="fileInput" accept="image/jpeg" multiple>
-    <br>
-    <button id="uploadButton">Hochladen</button>
-    <div id="status"></div>
-    <div id="results"></div>
+
+    <div id="dropZone">
+      <p>Bilder hierher ziehen oder klicken zum Auswählen</p>
+      <input type="file" id="fileInput" accept="image/jpeg" multiple style="display: none;">
+    </div>
+
+    <div id="fileList"></div>
+
+    <button id="uploadButton">Hochladen (<span id="fileCount">0</span> Bilder)</button>
+
+    <div id="uploadProgress" class="progress-line" style="display: none;">
+      <div>Hochgeladen: <span id="uploadedCount">0</span> / <span id="totalCount">0</span></div>
+      <div class="progress-bar-bg"><div id="uploadBar" class="progress-bar-fill"></div></div>
+    </div>
+
+    <div id="processProgress" class="progress-line" style="display: none;">
+      <div>Bearbeitet: <span id="processedCount">0</span> / <span id="totalCount2">0</span></div>
+      <div class="progress-bar-bg"><div id="processBar" class="progress-bar-fill"></div></div>
+    </div>
+
+    <div id="status" class="progress-line"></div>
+    <div id="downloadArea"></div>
   </div>
 
   <script>
@@ -68,8 +149,10 @@
     const REGION = "eu-central-1";
     const RAW_BUCKET = "camtrap-sorter-raw";
     const PROCESSED_BUCKET = "camtrap-sorter-processed";
+    const BATCH_SIZE = 20;
 
     let currentSessionId = null;
+    let selectedFiles = [];
 
     AWS.config.region = REGION;
     AWS.config.credentials = new AWS.CognitoIdentityCredentials({
@@ -78,8 +161,6 @@
 
     const s3 = new AWS.S3({ apiVersion: "2006-03-01" });
 
-    // crypto.randomUUID() ist nur in sicheren Kontexten (HTTPS oder localhost) verfügbar.
-    // S3 Static Website Hosting liefert nur über HTTP aus, daher Fallback nötig.
     function generateSessionId() {
       if (window.crypto && window.crypto.randomUUID) {
         return crypto.randomUUID();
@@ -91,33 +172,101 @@
       });
     }
 
-    document.getElementById("uploadButton").addEventListener("click", async () => {
-      const files = document.getElementById("fileInput").files;
-      const statusEl = document.getElementById("status");
-      const resultsEl = document.getElementById("results");
+    const dropZone = document.getElementById("dropZone");
+    const fileInput = document.getElementById("fileInput");
+    const fileListEl = document.getElementById("fileList");
+    const fileCountEl = document.getElementById("fileCount");
 
-      if (files.length === 0) {
+    dropZone.addEventListener("click", () => fileInput.click());
+    dropZone.addEventListener("dragover", (e) => { e.preventDefault(); dropZone.classList.add("dragover"); });
+    dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragover"));
+    dropZone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dropZone.classList.remove("dragover");
+      addFiles(e.dataTransfer.files);
+    });
+    fileInput.addEventListener("change", () => {
+      addFiles(fileInput.files);
+      fileInput.value = "";
+    });
+
+    function addFiles(fileListInput) {
+      for (const file of fileListInput) {
+        if (file.type === "image/jpeg") {
+          selectedFiles.push(file);
+        }
+      }
+      renderFileList();
+    }
+
+    function removeFile(index) {
+      selectedFiles.splice(index, 1);
+      renderFileList();
+    }
+
+    function renderFileList() {
+      fileListEl.innerHTML = "";
+      selectedFiles.forEach((file, index) => {
+        const item = document.createElement("div");
+        item.className = "file-item";
+
+        const name = document.createElement("span");
+        name.textContent = file.name;
+        item.appendChild(name);
+
+        const removeBtn = document.createElement("button");
+        removeBtn.textContent = "×";
+        removeBtn.onclick = () => removeFile(index);
+        item.appendChild(removeBtn);
+
+        fileListEl.appendChild(item);
+      });
+      fileCountEl.textContent = selectedFiles.length;
+    }
+
+    document.getElementById("uploadButton").addEventListener("click", async () => {
+      const statusEl = document.getElementById("status");
+      const downloadAreaEl = document.getElementById("downloadArea");
+
+      if (selectedFiles.length === 0) {
         statusEl.textContent = "Bitte zuerst Dateien auswählen.";
         return;
       }
 
       currentSessionId = generateSessionId();
-      resultsEl.innerHTML = "";
-      statusEl.textContent = "Lade hoch...";
+      downloadAreaEl.innerHTML = "";
+      statusEl.textContent = "";
+
+      const total = selectedFiles.length;
+      document.getElementById("totalCount").textContent = total;
+      document.getElementById("totalCount2").textContent = total;
+      document.getElementById("uploadProgress").style.display = "block";
+      document.getElementById("processProgress").style.display = "block";
+
+      // Verarbeitung (Polling) startet parallel zum Upload, da beide gleichzeitig laufen
+      startPolling(currentSessionId, total);
 
       try {
-        for (const file of files) {
-          const params = {
-            Bucket: RAW_BUCKET,
-            Key: `${currentSessionId}/${file.name}`,
-            Body: file,
-            ContentType: file.type,
-          };
-          await s3.putObject(params).promise();
-        }
+        let uploaded = 0;
+        for (let i = 0; i < selectedFiles.length; i += BATCH_SIZE) {
+          const batch = selectedFiles.slice(i, i + BATCH_SIZE);
 
-        statusEl.textContent = `${files.length} Datei(en) erfolgreich hochgeladen. Session-ID: ${currentSessionId}`;
-        startPolling(currentSessionId, files.length);
+          const uploadPromises = batch.map(file => {
+            const params = {
+              Bucket: RAW_BUCKET,
+              Key: `${currentSessionId}/${file.name}`,
+              Body: file,
+              ContentType: file.type,
+            };
+            return s3.putObject(params).promise();
+          });
+
+          await Promise.all(uploadPromises);
+          uploaded += batch.length;
+
+          document.getElementById("uploadedCount").textContent = uploaded;
+          document.getElementById("uploadBar").style.width = `${(uploaded / total) * 100}%`;
+        }
       } catch (err) {
         console.error(err);
         statusEl.textContent = "Fehler beim Hochladen. Details in der Browser-Konsole.";
@@ -125,13 +274,13 @@
     });
 
     function startPolling(sessionId, expectedCount) {
-      const resultsEl = document.getElementById("results");
+      const statusEl = document.getElementById("status");
+      const downloadAreaEl = document.getElementById("downloadArea");
       let attempts = 0;
-      const maxAttempts = 40; // 40 x 3s = 2 Minuten Timeout
+      const maxAttempts = 400; // 20 Minuten Timeout, für große Batches
 
       const intervalId = setInterval(async () => {
         attempts++;
-        console.log("Polling tick", attempts);
 
         try {
           const listResponse = await s3.listObjectsV2({
@@ -141,37 +290,50 @@
 
           const foundCount = listResponse.Contents ? listResponse.Contents.length : 0;
 
+          document.getElementById("processedCount").textContent = foundCount;
+          document.getElementById("processBar").style.width = `${(foundCount / expectedCount) * 100}%`;
+
           if (foundCount >= expectedCount) {
             clearInterval(intervalId);
-            resultsEl.innerHTML = "<strong>Fertig! Deine Ergebnisse:</strong><br>";
-
-            for (const item of listResponse.Contents) {
-              const url = s3.getSignedUrl("getObject", {
-                Bucket: PROCESSED_BUCKET,
-                Key: item.Key,
-                Expires: 300,
-              });
-
-              const link = document.createElement("a");
-              link.href = url;
-              link.download = item.Key.split("/").pop();
-              link.textContent = item.Key.replace(`${sessionId}/`, "");
-              link.style.display = "block";
-              resultsEl.appendChild(link);
-            }
+            statusEl.textContent = "Alle Bilder fertig sortiert. ZIP wird erstellt...";
+            await buildAndOfferZip(listResponse.Contents, sessionId);
+            statusEl.textContent = "Fertig!";
             return;
           }
-
-          resultsEl.textContent = `Verarbeitung läuft... (${foundCount}/${expectedCount} fertig)`;
         } catch (err) {
           console.error(err);
         }
 
         if (attempts >= maxAttempts) {
           clearInterval(intervalId);
-          resultsEl.textContent = "Zeitüberschreitung. Bitte Seite neu laden und erneut versuchen.";
+          statusEl.textContent = "Zeitüberschreitung. Bitte Seite neu laden und erneut versuchen.";
         }
       }, 3000);
+    }
+
+    async function buildAndOfferZip(items, sessionId) {
+      const zip = new JSZip();
+      const downloadAreaEl = document.getElementById("downloadArea");
+
+      for (const item of items) {
+        const relativePath = item.Key.replace(`${sessionId}/`, ""); // z.B. "tier/bild1.jpg"
+        const response = await s3.getObject({
+          Bucket: PROCESSED_BUCKET,
+          Key: item.Key,
+        }).promise();
+
+        zip.file(relativePath, response.Body);
+      }
+
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      const zipUrl = URL.createObjectURL(zipBlob);
+
+      const link = document.createElement("a");
+      link.href = zipUrl;
+      link.download = "sortierte-bilder.zip";
+      link.textContent = "ZIP herunterladen";
+      downloadAreaEl.innerHTML = "";
+      downloadAreaEl.appendChild(link);
     }
   </script>
 </body>
